@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+html { background: #ffffff; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #F4F6F6;
+  font-family: Arial, sans-serif;
+  display: flex;
+}
+.content {
+  margin: 40pt 40pt 70pt 40pt;
+  background: #FFFFFF;
+  border-radius: 12pt;
+  padding: 25pt;
+  flex: 1;
+}
+.header {
+  border-bottom: 4pt solid #2E4053;
+  padding-bottom: 10pt;
+  margin-bottom: 15pt;
+}
+h1 {
+  color: #1C2833;
+  font-size: 28pt;
+  margin: 0;
+}
+ul {
+  margin: 15pt 0;
+  padding-left: 30pt;
+}
+li {
+  font-size: 16pt;
+  margin: 10pt 0;
+  color: #2E4053;
+}
+.highlight {
+  background: #2E4053;
+  color: #FFFFFF;
+  padding: 15pt;
+  border-radius: 8pt;
+  margin-top: 15pt;
+}
+.highlight p {
+  margin: 0;
+  font-size: 18pt;
+  text-align: center;
+  color: #FFFFFF;
+}
+</style>
+</head>
+<body>
+<div class="content">
+  <div class="header">
+    <h1>GLM-4.7 에이전트 실행 엔진</h1>
+  </div>
+  <ul>
+    <li><b>개별 에이전트 실행</b>: run_agent() 메서드</li>
+    <li><b>부서 전체 실행</b>: run_department() 병렬 처리</li>
+    <li><b>부서간 협업</b>: run_cross_department_collaboration()</li>
+    <li><b>대화 기억</b>: 최근 3개 작업 저장</li>
+    <li><b>토큰 사용량 추적</b>: 비용 관리</li>
+  </ul>
+  <div class="highlight">
+    <p>20명의 AI 직원이 동시에 작업 수행 가능</p>
+  </div>
+</div>
+</body>
+</html>

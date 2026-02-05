@@ -3,7 +3,7 @@ import json
 import requests
 import asyncio
 from typing import Dict, Any, List
-from .scheduler import SCHEDULER
+from scheduler import SCHEDULER
 
 class EDMSAgentSystem:
     def __init__(self, api_key: str = None):

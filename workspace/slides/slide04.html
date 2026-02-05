@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+html { background: #ffffff; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #F4F6F6;
+  font-family: Arial, sans-serif;
+  display: flex;
+}
+.content {
+  margin: 40pt 40pt 60pt 40pt;
+  background: #FFFFFF;
+  border-radius: 12pt;
+  padding: 30pt;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.header {
+  border-bottom: 4pt solid #2E4053;
+  padding-bottom: 10pt;
+  margin-bottom: 20pt;
+}
+h1 {
+  color: #1C2833;
+  font-size: 28pt;
+  margin: 0;
+}
+.columns {
+  display: flex;
+  gap: 20pt;
+  flex: 1;
+}
+.col {
+  flex: 1;
+}
+.col-header {
+  border-left: 6pt solid #1C2833;
+  padding-left: 10pt;
+  margin-bottom: 10pt;
+}
+.col h3 {
+  color: #2E4053;
+  font-size: 18pt;
+  margin: 0;
+}
+.col ul {
+  margin: 0;
+  padding-left: 25pt;
+}
+.col li {
+  font-size: 14pt;
+  margin: 8pt 0;
+  color: #2E4053;
+}
+</style>
+</head>
+<body>
+<div class="content">
+  <div class="header">
+    <h1>주요 데이터 모델</h1>
+  </div>
+  <div class="columns">
+    <div class="col">
+      <div class="col-header">
+        <h3>핵심 모델</h3>
+      </div>
+      <ul>
+        <li>DepartmentType (부서 유형)</li>
+        <li>AgentRole (에이전트 역할)</li>
+        <li>AgentPersona (에이전트 페르소나)</li>
+        <li>Project (프로젝트)</li>
+        <li>Task (업무 태스크)</li>
+        <li>Meeting (회의)</li>
+      </ul>
+    </div>
+    <div class="col">
+      <div class="col-header">
+        <h3>프로젝트 관리</h3>
+      </div>
+      <ul>
+        <li>ProjectType (프로젝트 유형)</li>
+        <li>ProjectStatus (상태 추적)</li>
+        <li>우선순위 관리 (1-5)</li>
+        <li>부서별 배정</li>
+        <li>마감기한 추적</li>
+        <li>예산 관리</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>
