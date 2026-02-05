@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Environment Variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+socket_server_logs/
+agent_dialog_logs/
+*.json
+
+# Temporary files
+*.tmp
+*.bak
+nul
+
+# Output directories
+merge_output/
+monet_temp/
+agent_workspaces/
+workspace/node_modules/
+
+# Office files
+*.pptx
+*.xlsx
+*.xlsm
+*.docx
+
+# Reports and generated files
+*_REPORT.md
+*_LOG.md
+*_AUDIT_REPORT.md
+cable_*.txt
+deep_cell_*.txt
+vba_injection_report.txt
+
+# Cache
+.cache/
