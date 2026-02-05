@@ -51,12 +51,6 @@ GLM_KEYS=key1,key2,key3
 python main.py
 ```
 
-### ⚡ 빠른 시작 (한 줄 설치)
-```bash
-git clone https://github.com/byjay/kbj2.git && cd kbj2 && pip install -r requirements.txt
-```
-그 다음 `.env` 파일을 생성하고 실행하세요!
-
 ## 📋 Features
 
 - **100+ AI Agents**: 다양한 부서와 역할을 가진 AI 에이전트들
@@ -64,7 +58,7 @@ git clone https://github.com/byjay/kbj2.git && cd kbj2 && pip install -r require
 - **Auto-Orchestration**: 자동 프로젝트 관리 및 에이전트 조율
 - **Deep Research**: NotebookLM 통합 리서치 파이프라인
 
-## 🏗️ Project Structure
+## 📁 Project Structure (Supreme Minimalist: 10 Core Files)
 
 ```
 kbj2/
