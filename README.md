@@ -4,28 +4,58 @@ KBJ2는 100개 이상의 AI 에이전트를 조율하는 자동화된 기업 시
 
 ## 🚀 Quick Setup
 
-### 1. Clone Repository
+### 필수 요구사항
+- **Python 3.8 이상**
+- **pip** (Python package manager)
+- **Git**
+
+### 설치 단계
+
+#### 1️⃣ 저장소 클론
 ```bash
 git clone https://github.com/byjay/kbj2.git
 cd kbj2
 ```
 
-### 2. Install Dependencies
+#### 2️⃣ Python 의존성 설치
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Environment Configuration
-`.env` 파일을 생성하고 다음 내용을 추가하세요:
-```
+> **참고**: 가상환경 사용을 권장합니다
+> ```bash
+> python -m venv venv
+> # Windows
+> venv\Scripts\activate
+> # Linux/Mac
+> source venv/bin/activate
+> ```
+
+#### 3️⃣ 환경 변수 설정
+프로젝트 루트에 `.env` 파일을 생성하고 다음 내용을 추가하세요:
+
+```env
+# Google Gemini API Key (필수)
 GEMINI_API_KEY=your_gemini_api_key_here
-GLM_KEYS=your_glm_key1,your_glm_key2,your_glm_key3
+
+# GLM API Keys (필수, 쉼표로 구분)
+GLM_KEYS=key1,key2,key3
 ```
 
-### 4. Run
+**API 키 발급 방법:**
+- **Gemini API**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 발급
+- **GLM API**: [Z.AI Platform](https://api.z.ai)에서 발급
+
+#### 4️⃣ 실행
 ```bash
 python main.py
 ```
+
+### ⚡ 빠른 시작 (한 줄 설치)
+```bash
+git clone https://github.com/byjay/kbj2.git && cd kbj2 && pip install -r requirements.txt
+```
+그 다음 `.env` 파일을 생성하고 실행하세요!
 
 ## 📋 Features
 
