@@ -94,12 +94,52 @@ class TechnicalAnalyzer:
             }
         }
 
+class ExecutionEngine:
+    """Handles order execution via Dashboard API"""
+    
+    def __init__(self, api_url):
+        self.api_url = api_url
+
+    def execute_trade(self, ticker, action, confidence, price):
+        """Send order to Dashboard API"""
+        if confidence < 80:
+            return False
+            
+        log(f"🚀 [Execution] Sending {action} order for {ticker} (Confidence: {confidence}%)")
+        
+        # Determine Market
+        market = "KR"
+        if any(c.isalpha() for c in ticker) or len(ticker) > 6:
+            market = "US"
+            
+        payload = {
+            "ticker": ticker,
+            "action": action,
+            "quantity": 10 if market == "KR" else 1, # Small test quantity
+            "price": 0, # Market order
+            "market": market
+        }
+        
+        try:
+            resp = requests.post(f"{self.api_url}/api/order", json=payload, timeout=15)
+            if resp.status_code == 200:
+                result = resp.json()
+                log(f"✅ Trade Successful: {result.get('order_no')}")
+                return True
+            else:
+                log(f"❌ Trade Failed: {resp.text}")
+                return False
+        except Exception as e:
+            log(f"🔥 Execution Error: {e}")
+            return False
+
 class StockMonitorAgent:
     def __init__(self, duration_minutes=30):
         self.duration_minutes = duration_minutes
         self.start_time = datetime.now()
         self.end_time = self.start_time + timedelta(minutes=duration_minutes)
         self.analyzer = TechnicalAnalyzer()
+        self.executor = ExecutionEngine(STOCK_DASHBOARD_URL)
         self.analyzed_tickers = set()
 
     def fetch_market_radar(self):
@@ -160,6 +200,15 @@ class StockMonitorAgent:
                 # Heuristic Decision
                 decision = self.analyzer.analyze(ticker, analysis_context)
                 log(f"👉 {ticker}: {decision['action']} ({decision.get('confidence')}%) - {decision.get('reason')}")
+                
+                # Execute Trade if High Confidence
+                if decision["action"] in ["BUY", "SELL"]:
+                    self.executor.execute_trade(
+                        ticker, 
+                        decision["action"], 
+                        decision["confidence"], 
+                        decision["indicators"]["price"]
+                    )
                 
                 # Save Data
                 self.save_learning_data(ticker, analysis_context, decision)

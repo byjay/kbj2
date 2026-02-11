@@ -138,7 +138,9 @@ async def main():
     # Command: r2 (Cloudflare R2 Storage)
     elif args.command == "r2":
         if args.r2_command == "explore":
-            await run_standalone("r2_explorer.py")
+            # GUI app - run directly without asyncio subprocess
+            import subprocess
+            subprocess.run([sys.executable, "r2_explorer.py"])
         elif args.r2_command == "upload":
             from r2_client import R2Client
             client = R2Client()

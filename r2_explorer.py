@@ -1,17 +1,16 @@
 """
 KBJ2 R2 Cloud Storage Explorer
-File Explorer UI for Cloudflare R2 Storage
+File Explorer UI for Cloudflare R2 Storage (Korean, Windows Explorer Style)
 """
 import os
 import sys
-import asyncio
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from pathlib import Path
 from datetime import datetime
 from threading import Thread
-import webbrowser
+import shutil
 
 try:
     from PIL import Image, ImageTk
@@ -23,22 +22,33 @@ from r2_client import R2Client
 
 
 class R2Explorer:
-    """R2 Cloud Storage File Explorer GUI"""
+    """R2 Cloud Storage File Explorer GUI (한글)"""
 
-    # Color Scheme (Dark Theme)
+    # Color Scheme (Light Theme - Windows Style)
     COLORS = {
-        'bg': '#1e1e1e',
-        'fg': '#e0e0e0',
-        'select_bg': '#007acc',
+        'bg': '#ffffff',
+        'fg': '#000000',
+        'select_bg': '#0078d4',
         'select_fg': '#ffffff',
-        'tree_bg': '#252526',
-        'tree_fg': '#cccccc',
-        'header_bg': '#333333',
-        'header_fg': '#ffffff',
-        'accent': '#007acc',
-        'success': '#4ec9b0',
-        'error': '#f48771',
-        'border': '#3e3e42'
+        'tree_bg': '#ffffff',
+        'tree_fg': '#000000',
+        'header_bg': '#f3f3f3',
+        'header_fg': '#000000',
+        'accent': '#0078d4',
+        'success': '#107c10',
+        'error': '#d13438',
+        'border': '#e1e1e1'
+    }
+
+    # File icons
+    ICONS = {
+        'folder': '📁',
+        'pdf': '📄',
+        'image': '🖼️',
+        'video': '🎬',
+        'archive': '📦',
+        'code': '📝',
+        'default': '📄'
     }
 
     def __init__(self, root=None):
@@ -47,15 +57,20 @@ class R2Explorer:
         else:
             self.root = root
 
-        self.root.title("KBJ2 R2 Cloud Explorer")
-        self.root.geometry("1200x700")
+        self.root.title("KBJ2 R2 클라우드 탐색기")
+        self.root.geometry("1000x600")
         self.root.configure(bg=self.COLORS['bg'])
 
         # R2 Client
         self.client = None
-        self.current_prefix = ""
-        self.selected_file = None
-        self.upload_queue = []
+        self.current_path = ""  # R2 current path
+        self.selected_items = []  # Selected items
+        self.clipboard = None  # For copy/paste: (key, operation)
+        self.history = []  # Navigation history
+        self.history_index = -1
+
+        # File cache for display
+        self.file_cache = {}
 
         # Setup UI
         self._setup_styles()
@@ -65,26 +80,24 @@ class R2Explorer:
         self._init_r2()
 
     def _setup_styles(self):
-        """Setup ttk styles"""
+        """Setup ttk styles (Windows 11 style)"""
         style = ttk.Style()
-        style.theme_use('clam')
+        style.theme_use('winnative')
 
-        # Configure styles with dark theme
+        # Configure styles
         style.configure('TFrame', background=self.COLORS['bg'])
         style.configure('TLabel', background=self.COLORS['bg'], foreground=self.COLORS['fg'])
-        style.configure('TButton', background=self.COLORS['header_bg'], foreground=self.COLORS['header_fg'],
-                      borderwidth=1, focuscolor='none')
-        style.map('TButton', background=[('active', self.COLORS['accent'])])
+        style.configure('TButton', padding=5)
 
-        style.configure('Header.TLabel', font=('Segoe UI', 10, 'bold'), foreground=self.COLORS['accent'])
+        style.configure('Header.TLabel', font=('맑은 고딕', 9, 'bold'), foreground=self.COLORS['accent'])
         style.configure('Path.TLabel', font=('Consolas', 9))
 
         style.configure('Treeview',
                        background=self.COLORS['tree_bg'],
                        foreground=self.COLORS['tree_fg'],
                        fieldbackground=self.COLORS['tree_bg'],
-                       borderwidth=0,
-                       rowheight=28)
+                       borderwidth=1,
+                       rowheight=25)
         style.map('Treeview', background=[('selected', self.COLORS['select_bg'])],
                   foreground=[('selected', self.COLORS['select_fg'])])
 
@@ -95,243 +108,277 @@ class R2Explorer:
                        relief='flat')
         style.map('Treeview.Heading', background=[('active', self.COLORS['accent'])])
 
-        style.configure('Status.TLabel', font=('Segoe UI', 9), foreground=self.COLORS['success'])
-        style.configure('Error.TLabel', font=('Segoe UI', 9), foreground=self.COLORS['error'])
-
-        # Progress bar
-        style.configure('Horizontal.TProgressbar',
-                       background=self.COLORS['accent'],
-                       troughcolor=self.COLORS['header_bg'],
-                       borderwidth=0,
-                       thickness=8)
+        style.configure('Status.TLabel', font=('맑은 고딕', 9), foreground=self.COLORS['success'])
+        style.configure('Error.TLabel', font=('맑은 고딕', 9), foreground=self.COLORS['error'])
 
     def _create_widgets(self):
         """Create all UI widgets"""
         # Main container
         main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame.pack(fill='both', expand=True)
 
-        # Header
-        self._create_header(main_frame)
-
-        # Toolbar
+        # Toolbar (상단 도구 모음)
         self._create_toolbar(main_frame)
 
-        # Content Area (Split)
+        # Address bar (주소 표시줄)
+        self._create_address_bar(main_frame)
+
+        # Content Area (파일 목록)
         content_frame = ttk.Frame(main_frame)
-        content_frame.pack(fill='both', expand=True, pady=(10, 0))
-
-        # Left: Folder Tree
-        left_panel = ttk.Frame(content_frame)
-        left_panel.pack(side='left', fill='both', expand=(False, False), padx=(0, 5))
-        self._create_folder_tree(left_panel)
-
-        # Right: File List
-        right_panel = ttk.Frame(content_frame)
-        right_panel.pack(side='left', fill='both', expand=True)
-        self._create_file_list(right_panel)
-
-        # Upload Zone (Bottom)
-        self._create_upload_zone(main_frame)
+        content_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        self._create_file_list(content_frame)
 
         # Status Bar
         self._create_status_bar(main_frame)
 
-    def _create_header(self, parent):
-        """Create header section"""
-        header = ttk.Frame(parent)
-        header.pack(fill='x', pady=(0, 10))
-
-        # Title
-        title = ttk.Label(header, text="R2 Cloud Storage Explorer", style='Header.TLabel')
-        title.pack(side='left')
-
-        # Connection status
-        self.conn_label = ttk.Label(header, text="Initializing...", style='Status.TLabel')
-        self.conn_label.pack(side='right')
+        # Context Menu (우클릭 메뉴)
+        self._create_context_menu()
 
     def _create_toolbar(self, parent):
-        """Create toolbar with actions"""
+        """Create toolbar (상단 도구 모음)"""
         toolbar = ttk.Frame(parent)
-        toolbar.pack(fill='x', pady=(0, 5))
+        toolbar.pack(fill='x', padx=5, pady=5)
 
-        buttons = [
-            ("🔃 Refresh", self.refresh),
-            ("📤 Upload", self.upload_files),
-            ("⬇️ Download", self.download_file),
-            ("📁 New Folder", self.create_folder),
-            ("🗑️ Delete", self.delete_file),
-            ("🔗 Share URL", self.share_file),
-            ("🏠 Home", self.go_home)
-        ]
+        # Navigation buttons
+        nav_frame = ttk.Frame(toolbar)
+        nav_frame.pack(side='left')
 
-        for text, cmd in buttons:
-            btn = ttk.Button(toolbar, text=text, command=cmd)
-            btn.pack(side='left', padx=2)
+        ttk.Button(nav_frame, text="◀ 뒤로", width=10, command=self.go_back).pack(side='left', padx=2)
+        ttk.Button(nav_frame, text="앞으로 ▶", width=10, command=self.go_forward).pack(side='left', padx=2)
+        ttk.Button(nav_frame, text="⬆️ 상위", width=10, command=self.go_up).pack(side='left', padx=2)
+        ttk.Button(nav_frame, text="🏠 홈", width=10, command=self.go_home).pack(side='left', padx=2)
 
-        # Breadcrumb
-        self.breadcrumb = ttk.Label(toolbar, text="/", style='Path.TLabel')
-        self.breadcrumb.pack(side='left', padx=(20, 0))
+        # Action buttons
+        action_frame = ttk.Frame(toolbar)
+        action_frame.pack(side='left', padx=20)
 
-    def _create_folder_tree(self, parent):
-        """Create folder tree view"""
-        container = ttk.Frame(parent)
-        container.pack(fill='both', expand=True)
+        ttk.Button(action_frame, text="📂 새 폴더", command=self.create_folder).pack(side='left', padx=2)
+        ttk.Button(action_frame, text="📤 업로드", command=self.upload_files).pack(side='left', padx=2)
+        ttk.Button(action_frame, text="⬇️ 다운로드", command=self.download_file).pack(side='left', padx=2)
+        ttk.Button(action_frame, text="🗑️ 삭제", command=self.delete_selected).pack(side='left', padx=2)
 
-        header = ttk.Label(container, text="Folders", style='Header.TLabel')
-        header.pack(fill='x', pady=(0, 5))
+        # View buttons
+        view_frame = ttk.Frame(toolbar)
+        view_frame.pack(side='right')
 
-        self.folder_tree = ttk.Treeview(container, show='tree', selectmode='browse')
-        self.folder_tree.pack(fill='both', expand=True)
+        ttk.Button(view_frame, text="🔄 새로고침", command=self.refresh).pack(side='left', padx=2)
 
-        self.folder_tree.bind('<<TreeviewSelect>>', self._on_folder_select)
-        self.folder_tree.bind('<Double-1>', self._on_folder_double)
+    def _create_address_bar(self, parent):
+        """Create address bar (주소 표시줄)"""
+        addr_frame = ttk.Frame(parent)
+        addr_frame.pack(fill='x', padx=5, pady=2)
 
-        # Scrollbar
-        vsb = ttk.Scrollbar(container, orient='vertical', command=self.folder_tree.yview)
-        vsb.pack(side='right', fill='y')
-        self.folder_tree.configure(yscrollcommand=vsb.set)
+        ttk.Label(addr_frame, text="주소:", style='Header.TLabel').pack(side='left', padx=(0, 5))
+
+        self.address_var = tk.StringVar(value="R2:/")
+        address_entry = ttk.Entry(addr_frame, textvariable=self.address_var)
+        address_entry.pack(side='left', fill='x', expand=True)
+        address_entry.bind('<Return>', lambda e: self.navigate_to_path())
+
+        ttk.Button(addr_frame, text="이동", width=8, command=self.navigate_to_path).pack(side='left', padx=(5, 0))
 
     def _create_file_list(self, parent):
-        """Create file list view"""
-        container = ttk.Frame(parent)
-        container.pack(fill='both', expand=True)
+        """Create file list view (Windows Explorer 스타일)"""
+        # 단일 트리뷰: 폴더와 파일 함께 표시
+        columns = ('name', 'size', 'type', 'modified')
+        self.file_list = ttk.Treeview(parent, columns=columns, show='tree headings', selectmode='extended')
 
-        header = ttk.Label(container, text="Files", style='Header.TLabel')
-        header.pack(fill='x', pady=(0, 5))
+        # 헤더 (한글)
+        self.file_list.heading('#0', text='')
+        self.file_list.heading('name', text='이름')
+        self.file_list.heading('size', text='크기')
+        self.file_list.heading('type', text='유형')
+        self.file_list.heading('modified', text='수정한 날짜')
 
-        # Treeview with columns
-        columns = ('name', 'size', 'modified')
-        self.file_list = ttk.Treeview(container, columns=columns, show='headings', selectmode='browse')
-
-        self.file_list.heading('name', text='Name', command=lambda c='name': self._sort_by(c))
-        self.file_list.heading('size', text='Size', command=lambda c='size': self._sort_by(c))
-        self.file_list.heading('modified', text='Modified', command=lambda c='modified': self._sort_by(c))
-
-        self.file_list.column('name', width=300, anchor='w')
+        # 컬럼 너비
+        self.file_list.column('#0', width=50, stretch=False)
+        self.file_list.column('name', width=400, anchor='w')
         self.file_list.column('size', width=100, anchor='e')
+        self.file_list.column('type', width=120, anchor='w')
         self.file_list.column('modified', width=180, anchor='w')
 
         self.file_list.pack(fill='both', expand=True)
 
-        self.file_list.bind('<<TreeviewSelect>>', self._on_file_select)
-        self.file_list.bind('<Double-1>', self._on_file_double)
+        # 이벤트 바인딩
+        self.file_list.bind('<<TreeviewSelect>>', self._on_select)
+        self.file_list.bind('<Double-1>', self._on_double)
+        self.file_list.bind('<Button-3>', self._show_context_menu)  # 우클릭
 
         # Scrollbars
-        vsb = ttk.Scrollbar(container, orient='vertical', command=self.file_list.yview)
+        vsb = ttk.Scrollbar(parent, orient='vertical', command=self.file_list.yview)
         vsb.pack(side='right', fill='y')
-        hsb = ttk.Scrollbar(container, orient='horizontal', command=self.file_list.xview)
+        hsb = ttk.Scrollbar(parent, orient='horizontal', command=self.file_list.xview)
         hsb.pack(side='bottom', fill='x')
 
         self.file_list.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-    def _create_upload_zone(self, parent):
-        """Create drag-and-drop upload zone"""
-        zone_frame = ttk.LabelFrame(parent, text="Upload Zone (Drag & Drop)", padding=10)
-        zone_frame.pack(fill='x', pady=(10, 5))
-
-        self.upload_label = ttk.Label(zone_frame, text="Drop files here to upload",
-                                    background=self.COLORS['tree_bg'],
-                                    foreground=self.COLORS['tree_fg'],
-                                    padding=20)
-        self.upload_label.pack(fill='both', expand=True)
-
-        # Progress bar
-        self.progress = ttk.Progressbar(zone_frame, style='Horizontal.TProgressbar', mode='determinate')
-        self.progress.pack(fill='x', pady=(10, 0))
-
-        # Try to enable drag-and-drop
-        try:
-            self.root.drop_target_register(DND_FILES)
-            self.root.dnd_bind('<<Drop>>', self._on_drop)
-            self.upload_label.configure(text="Drop files here to upload - READY")
-        except:
-            self.upload_label.configure(text="Upload zone (tkinterdnd2 not installed)")
-
     def _create_status_bar(self, parent):
-        """Create status bar"""
+        """Create status bar (상태 표시줄)"""
         status_frame = ttk.Frame(parent)
-        status_frame.pack(fill='x', pady=(10, 0))
+        status_frame.pack(fill='x', padx=5, pady=2)
 
-        self.status_label = ttk.Label(status_frame, text="Ready", style='Status.TLabel')
+        self.status_label = ttk.Label(status_frame, text="준비", style='Status.TLabel')
         self.status_label.pack(side='left')
 
         self.info_label = ttk.Label(status_frame, text="", style='Path.TLabel')
         self.info_label.pack(side='right')
+
+    def _create_context_menu(self):
+        """Create right-click context menu (우클릭 메뉴)"""
+        self.context_menu = tk.Menu(self.root, tearoff=0)
+
+        self.context_menu.add_command(label="📂 열기", command=self.open_item)
+        self.context_menu.add_command(label="⬇️ 다운로드", command=self.download_file)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="📋 복사", command=self.copy_item)
+        self.context_menu.add_command(label="✂️ 잘라내기", command=self.cut_item)
+        self.context_menu.add_command(label="📋 붙여넣기", command=self.paste_item)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="✏️ 이름 바꾸기", command=self.rename_item)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="🔗 공유 링크", command=self.share_file)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="🗑️ 삭제", command=self.delete_selected)
 
     # ============================================================
     # INITIALIZATION
     # ============================================================
 
     def _init_r2(self):
-        """Initialize R2 client in background"""
+        """Initialize R2 client"""
         def init():
             try:
                 self.client = R2Client()
-                self._update_status("Connected to R2", "success")
+                self._update_status("R2 연결됨", "success")
                 self.refresh()
             except Exception as e:
-                self._update_status(f"Connection failed: {e}", "error")
+                self._update_status(f"연결 실패: {e}", "error")
+                messagebox.showerror("연결 오류", f"R2에 연결할 수 없습니다.\n\n환경변수를 설정하세요:\nR2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY")
 
         Thread(target=init, daemon=True).start()
 
     # ============================================================
-    # ACTIONS
+    # NAVIGATION
+    # ============================================================
+
+    def go_back(self):
+        """뒤로 가기"""
+        if self.history_index > 0:
+            self.history_index -= 1
+            self.current_path = self.history[self.history_index]
+            self._load_path(self.current_path, add_history=False)
+
+    def go_forward(self):
+        """앞으로 가기"""
+        if self.history_index < len(self.history) - 1:
+            self.history_index += 1
+            self.current_path = self.history[self.history_index]
+            self._load_path(self.current_path, add_history=False)
+
+    def go_up(self):
+        """상위 폴더로 이동"""
+        if self.current_path:
+            parent = '/'.join(self.current_path.split('/')[:-1])
+            self.current_path = parent
+            self._load_path(parent)
+
+    def go_home(self):
+        """홈으로 이동"""
+        self.current_path = ""
+        self._load_path("")
+
+    def navigate_to_path(self):
+        """주소창에서 경로 이동"""
+        path = self.address_var.get().replace("R2:/", "")
+        self.current_path = path
+        self._load_path(path)
+
+    # ============================================================
+    # FILE OPERATIONS
     # ============================================================
 
     def refresh(self):
-        """Refresh folder tree and file list"""
+        """새로고침"""
         if not self.client:
             return
-
-        def do_refresh():
-            self._load_folders()
-            self._load_files(self.current_prefix)
-
-        Thread(target=do_refresh, daemon=True).start()
+        self._load_path(self.current_path, add_history=False)
 
     def upload_files(self):
-        """Open file dialog for upload"""
+        """파일 업로드"""
         files = filedialog.askopenfilenames(
-            title="Select files to upload",
+            title="업로드할 파일 선택",
             filetypes=[
-                ("All files", "*.*"),
-                ("Documents", "*.pdf;*.doc;*.docx;*.txt"),
-                ("Images", "*.png;*.jpg;*.jpeg;*.gif"),
-                ("Archives", "*.zip;*.rar;*.7z")
+                ("모든 파일", "*.*"),
+                ("문서", "*.pdf;*.doc;*.docx;*.txt;*.xlsx"),
+                ("이미지", "*.png;*.jpg;*.jpeg;*.gif;*.bmp"),
+                ("압축", "*.zip;*.rar;*.7z")
             ]
         )
         if files:
-            self._upload_files(list(files))
+            def do_upload():
+                for i, file_path in enumerate(files):
+                    name = Path(file_path).name
+                    key = f"{self.current_path}/{name}".strip("/") if self.current_path else name
+
+                    self._update_status(f"업로드 중: {name}")
+                    if self.client.upload_file(file_path, key):
+                        self._update_status(f"업로드 완료: {name}", "success")
+                    else:
+                        self._update_status(f"업로드 실패: {name}", "error")
+
+                self.refresh()
+
+            Thread(target=do_upload, daemon=True).start()
 
     def download_file(self):
-        """Download selected file"""
-        if not self.selected_file:
-            messagebox.showwarning("No Selection", "Please select a file first")
+        """파일 다운로드"""
+        selection = self.file_list.selection()
+        if not selection:
+            messagebox.showwarning("선택 없음", "파일을 먼저 선택하세요")
             return
 
-        dest = filedialog.asksaveasfilename(
-            title="Save file",
-            initialvalue=Path(self.selected_file['key']).name
-        )
-        if dest:
-            def do_download():
-                self._update_status(f"Downloading {self.selected_file['key']}...")
-                success = self.client.download_file(self.selected_file['key'], dest)
-                if success:
-                    self._update_status("Download complete", "success")
-                else:
-                    self._update_status("Download failed", "error")
+        items = [self.file_list.item(s) for s in selection]
 
-            Thread(target=do_download, daemon=True).start()
+        if len(items) == 1:
+            # 단일 파일 다운로드
+            item_data = items[0]['tags'][0] if items[0]['tags'] else None
+            if not item_data or item_data.get('is_dir'):
+                return
+
+            dest = filedialog.asksaveasfilename(
+                title="다운로드",
+                initialfile=items[0]['values'][0]
+            )
+            if dest:
+                def do_download():
+                    self._update_status(f"다운로드 중: {items[0]['values'][0]}")
+                    if self.client.download_file(item_data['key'], dest):
+                        self._update_status("다운로드 완료", "success")
+                    else:
+                        self._update_status("다운로드 실패", "error")
+
+                Thread(target=do_download, daemon=True).start()
+        else:
+            # 다중 파일 다운로드 - 폴더 선택
+            dest_dir = filedialog.askdirectory(title="다운로드 위치")
+            if dest_dir:
+                def do_download_multi():
+                    for item in items:
+                        item_data = item['tags'][0] if item['tags'] else None
+                        if item_data and not item_data.get('is_dir'):
+                            dest = Path(dest_dir) / item['values'][0]
+                            self.client.download_file(item_data['key'], str(dest))
+
+                    self._update_status("다운로드 완료", "success")
+
+                Thread(target=do_download_multi, daemon=True).start()
 
     def create_folder(self):
-        """Create new folder"""
-        from tkinter import simpledialog
-        name = simpledialog.askstring("New Folder", "Enter folder name:")
+        """새 폴더 만들기"""
+        name = simpledialog.askstring("새 폴더", "폴더 이름:")
         if name:
-            folder_key = f"{self.current_prefix}/{name}/".replace("//", "/")
-            # Create empty folder by uploading empty content
+            folder_key = f"{self.current_path}/{name}/".replace("//", "/") if self.current_path else f"{name}/"
+
             try:
                 self.client.s3_client.put_object(
                     Bucket=self.client.bucket_name,
@@ -340,132 +387,256 @@ class R2Explorer:
                 )
                 self.refresh()
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to create folder: {e}")
+                messagebox.showerror("오류", f"폴더 생성 실패: {e}")
 
-    def delete_file(self):
-        """Delete selected file/folder"""
-        if not self.selected_file:
-            messagebox.showwarning("No Selection", "Please select a file first")
+    def delete_selected(self):
+        """선택 항목 삭제"""
+        selection = self.file_list.selection()
+        if not selection:
             return
 
-        if messagebox.askyesno("Confirm Delete", f"Delete {self.selected_file['key']}?"):
-            success = self.client.delete_file(self.selected_file['key'])
-            if success:
+        items = [self.file_list.item(s) for s in selection]
+        count = len(items)
+
+        if messagebox.askyesno("삭제 확인", f"{count}개 항목을 삭제하시겠습니까?"):
+            def do_delete():
+                for item in items:
+                    item_data = item['tags'][0] if item['tags'] else None
+                    if item_data:
+                        key = item_data['key']
+                        if item_data.get('is_dir'):
+                            # 폴더 삭제 - 모든 항목 삭제
+                            self.client.delete_prefix(key.rstrip('/') + '/')
+                        else:
+                            self.client.delete_file(key)
+
                 self.refresh()
-                self._update_status("Deleted successfully", "success")
+                self._update_status(f"{count}개 항목 삭제됨", "success")
+
+            Thread(target=do_delete, daemon=True).start()
+
+    def rename_item(self):
+        """이름 바꾸기"""
+        selection = self.file_list.selection()
+        if not selection or len(selection) > 1:
+            return
+
+        item = self.file_list.item(selection[0])
+        item_data = item['tags'][0] if item['tags'] else None
+        if not item_data:
+            return
+
+        old_name = item['values'][0]
+        new_name = simpledialog.askstring("이름 바꾸기", "새 이름:", initialvalue=old_name)
+
+        if new_name and new_name != old_name:
+            old_key = item_data['key']
+            new_key = '/'.join(old_key.split('/')[:-1]) + '/' + new_name
+
+            try:
+                # R2는 직접 rename이 없으므로 copy + delete
+                self.client.s3_client.copy_object(
+                    CopySource={'Bucket': self.client.bucket_name, 'Key': old_key},
+                    Bucket=self.client.bucket_name,
+                    Key=new_key
+                )
+                self.client.s3_client.delete_object(Bucket=self.client.bucket_name, Key=old_key)
+                self.refresh()
+            except Exception as e:
+                messagebox.showerror("오류", f"이름 바꾸기 실패: {e}")
+
+    def copy_item(self):
+        """복사"""
+        selection = self.file_list.selection()
+        if selection:
+            item = self.file_list.item(selection[0])
+            item_data = item['tags'][0] if item['tags'] else None
+            if item_data:
+                self.clipboard = (item_data, 'copy')
+                self._update_status("클립보드에 복사됨")
+
+    def cut_item(self):
+        """잘라내기"""
+        selection = self.file_list.selection()
+        if selection:
+            item = self.file_list.item(selection[0])
+            item_data = item['tags'][0] if item['tags'] else None
+            if item_data:
+                self.clipboard = (item_data, 'cut')
+                self._update_status("클립보드에 잘라내기됨")
+
+    def paste_item(self):
+        """붙여넣기"""
+        if not self.clipboard:
+            return
+
+        item_data, op = self.clipboard
+        old_key = item_data['key']
+        name = Path(old_key).name
+        new_key = f"{self.current_path}/{name}".replace("//", "/") if self.current_path else name
+
+        try:
+            self.client.s3_client.copy_object(
+                CopySource={'Bucket': self.client.bucket_name, 'Key': old_key},
+                Bucket=self.client.bucket_name,
+                Key=new_key
+            )
+
+            if op == 'cut':
+                self.client.s3_client.delete_object(Bucket=self.client.bucket_name, Key=old_key)
+                self.clipboard = None
+
+            self.refresh()
+            self._update_status("붙여넣기 완료", "success")
+        except Exception as e:
+            messagebox.showerror("오류", f"붙여넣기 실패: {e}")
+
+    def open_item(self):
+        """항목 열기 (폴더 이동)"""
+        selection = self.file_list.selection()
+        if selection:
+            item = self.file_list.item(selection[0])
+            item_data = item['tags'][0] if item['tags'] else None
+
+            if item_data and item_data.get('is_dir'):
+                # 폴더 열기
+                folder_path = item_data['key'].rstrip('/')
+                self.current_path = folder_path
+                self._load_path(folder_path)
             else:
-                self._update_status("Delete failed", "error")
+                # 파일 다운로드 후 열기
+                self.download_file()
 
     def share_file(self):
-        """Generate and copy share URL"""
-        if not self.selected_file:
-            messagebox.showwarning("No Selection", "Please select a file first")
+        """공유 링크 생성"""
+        selection = self.file_list.selection()
+        if not selection:
             return
 
-        from tkinter import simpledialog
-        expires = simpledialog.askinteger("Share URL", "Expiration (seconds):", initialvalue=3600, minvalue=60, maxvalue=604800)
+        item = self.file_list.item(selection[0])
+        item_data = item['tags'][0] if item['tags'] else None
+        if not item_data or item_data.get('is_dir'):
+            return
+
+        expires = simpledialog.askinteger("공유 링크", "유효 시간 (초):", initialvalue=3600, minvalue=60, maxvalue=604800)
         if expires:
-            url = self.client.get_signed_url(self.selected_file['key'], expires)
+            url = self.client.get_signed_url(item_data['key'], expires)
             if url:
                 self.root.clipboard_clear()
                 self.root.clipboard_append(url)
-                messagebox.showinfo("Share URL", f"URL copied to clipboard!\n\nValid for {expires}s")
-            else:
-                messagebox.showerror("Error", "Failed to generate URL")
-
-    def go_home(self):
-        """Navigate to root"""
-        self.current_prefix = ""
-        self.breadcrumb.config(text="/")
-        self.refresh()
+                messagebox.showinfo("공유 링크", f"링크가 클립보드에 복사되었습니다!\n\n유효 시간: {expires}초")
 
     # ============================================================
     # INTERNAL METHODS
     # ============================================================
 
-    def _load_folders(self):
-        """Load folder tree"""
-        # Clear existing
-        for item in self.folder_tree.get_children():
-            self.folder_tree.delete(item)
+    def _load_path(self, path, add_history=True):
+        """Load path contents"""
+        self.current_path = path
+        self.address_var.set(f"R2:/{path}" if path else "R2:/")
 
-        # Load root folders
-        folders = self.client.list_folders("")
-        for folder in folders:
-            self.folder_tree.insert('', 'end', text=folder, values=(folder,))
+        if add_history:
+            # 히스토리 추가
+            if self.history_index < len(self.history) - 1:
+                self.history = self.history[:self.history_index + 1]
+            self.history.append(path)
+            self.history_index = len(self.history) - 1
 
-    def _load_files(self, prefix):
-        """Load files for current prefix"""
-        # Clear existing
-        for item in self.file_list.get_children():
-            self.file_list.delete(item)
+        def do_load():
+            # Clear existing
+            for item in self.file_list.get_children():
+                self.file_list.delete(item)
 
-        files = self.client.list_files(prefix)
-        for file in files:
-            name = Path(file['key']).name
-            size = self._format_size(file['size'])
-            modified = file['last_modified'].strftime("%Y-%m-%d %H:%M")
+            # Load folders and files
+            folders = self.client.list_folders(path if path else "")
+            files = self.client.list_objects(path if path else "", max_keys=1000)
 
-            self.file_list.insert('', 'end', values=(name, size, modified), tags=(file['key'],))
+            # Add parent folder if not root
+            if path:
+                self.file_list.insert('', 'end', text='..',
+                    values=('.. (상위 폴더)', '', '폴더', ''),
+                    tags=[{'is_dir': True, 'key': '/'.join(path.split('/')[:-1])}])
 
-        self._update_info(f"{len(files)} items")
+            # Add folders first
+            for folder in folders:
+                name = folder.split('/')[-1] or folder
+                self.file_list.insert('', 'end', text=self.ICONS['folder'],
+                    values=(name, '', '폴더', ''),
+                    tags=[{'is_dir': True, 'key': folder}])
 
-    def _upload_files(self, files):
-        """Upload files in background"""
-        def do_upload():
-            total = len(files)
-            for i, file_path in enumerate(files):
-                name = Path(file_path).name
-                key = f"{self.current_prefix}/{name}".replace("//", "/")
+            # Add files
+            for file in files:
+                name = Path(file['key']).name
+                size = self._format_size(file['size'])
+                modified = file['last_modified'].strftime("%Y-%m-%d %H:%M")
+                file_type = self._get_file_type(name)
 
-                self._update_status(f"Uploading {name}...")
-                self.progress['value'] = (i / total) * 100
+                icon = self._get_file_icon(name)
 
-                self.client.upload_file(file_path, key)
+                self.file_list.insert('', 'end', text=icon,
+                    values=(name, size, file_type, modified),
+                    tags=[{'is_dir': False, 'key': file['key']}])
 
-            self.progress['value'] = 100
-            self._update_status(f"Uploaded {total} files", "success")
-            self.refresh()
+            total = len(folders) + len(files)
+            self._update_info(f"{total}개 항목")
 
-        Thread(target=do_upload, daemon=True).start()
+        Thread(target=do_load, daemon=True).start()
 
-    def _on_drop(self, event):
-        """Handle drag-and-drop"""
-        files = self.root.tk.splitlist(event.data)
-        self._upload_files(files)
+    def _get_file_type(self, filename):
+        """Get file type description"""
+        ext = Path(filename).suffix.lower()
+        types = {
+            '.pdf': 'PDF 문서',
+            '.doc': 'Word 문서',
+            '.docx': 'Word 문서',
+            '.xls': 'Excel 시트',
+            '.xlsx': 'Excel 시트',
+            '.txt': '텍스트',
+            '.jpg': '이미지',
+            '.jpeg': '이미지',
+            '.png': '이미지',
+            '.gif': '이미지',
+            '.bmp': '이미지',
+            '.mp4': '비디오',
+            '.avi': '비디오',
+            '.mkv': '비디오',
+            '.mp3': '오디오',
+            '.zip': '압축 파일',
+            '.rar': '압축 파일',
+            '.7z': '압축 파일',
+        }
+        return types.get(ext, f'{ext[1:].upper()} 파일')
 
-    def _on_folder_select(self, event):
-        """Handle folder selection"""
-        selection = self.folder_tree.selection()
-        if selection:
-            folder = self.folder_tree.item(selection[0])['values'][0]
-            self.current_prefix = folder
+    def _get_file_icon(self, filename):
+        """Get file icon emoji"""
+        ext = Path(filename).suffix.lower()
+        if ext in ['.pdf']:
+            return self.ICONS['pdf']
+        elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+            return self.ICONS['image']
+        elif ext in ['.mp4', '.avi', '.mkv']:
+            return self.ICONS['video']
+        elif ext in ['.zip', '.rar', '.7z']:
+            return self.ICONS['archive']
+        elif ext in ['.py', '.js', '.html', '.css']:
+            return self.ICONS['code']
+        return self.ICONS['default']
 
-    def _on_folder_double(self, event):
-        """Handle folder double-click"""
-        selection = self.folder_tree.selection()
-        if selection:
-            folder = self.folder_tree.item(selection[0])['values'][0]
-            self.current_prefix = folder
-            self.breadcrumb.config(text=f"/{folder}")
-            self._load_files(folder)
-
-    def _on_file_select(self, event):
-        """Handle file selection"""
+    def _on_select(self, event):
+        """Handle selection"""
         selection = self.file_list.selection()
-        if selection:
-            item = self.file_list.item(selection[0])
-            key = item['tags'][0]
-            size = item['values'][1]
-            self.selected_file = {'key': key, 'size': size}
+        self.selected_items = selection
 
-    def _on_file_double(self, event):
-        """Handle file double-click - download"""
-        self.download_file()
+    def _on_double(self, event):
+        """Handle double-click"""
+        self.open_item()
 
-    def _sort_by(self, column):
-        """Sort by column (placeholder)"""
-        pass
+    def _show_context_menu(self, event):
+        """Show context menu"""
+        item = self.file_list.identify_row(event.y)
+        if item:
+            self.file_list.selection_set(item)
+            self.context_menu.post(event.x_root, event.y_root)
 
     def _update_status(self, text, style="Status"):
         """Update status label"""
@@ -476,7 +647,7 @@ class R2Explorer:
         self.info_label.config(text=text)
 
     def _format_size(self, bytes_size):
-        """Format bytes to human readable"""
+        """Format bytes to human readable (한글)"""
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
             if bytes_size < 1024:
                 return f"{bytes_size:.1f} {unit}"
@@ -486,7 +657,11 @@ class R2Explorer:
 
 def main():
     """Main entry point"""
-    root = TkinterDnD.Tk() if 'TkinterDnD' in dir() else tk.Tk()
+    try:
+        root = TkinterDnD.Tk()
+    except:
+        root = tk.Tk()
+
     app = R2Explorer(root)
     root.mainloop()
 
