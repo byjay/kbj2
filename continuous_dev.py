@@ -7,16 +7,25 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # --- CONFIGURATION ---
-KBJ2_ROOT = Path(r"f:\kbj2")
+# Cloud-compatible: use relative paths based on script location
+KBJ2_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
 QUEUE_FILE = KBJ2_ROOT / "data" / "queue.json"
 INTERVAL_HOURS = 5
 RETRY_DELAY_MINUTES = 10
+HEALTH_PORT = int(os.environ.get("PORT", 8080))
 
 class ContinuousDeveloper:
     def __init__(self):
         self.is_running = True
-        if sys.platform == 'win32':
-            sys.stdout.reconfigure(encoding='utf-8')
+        self.start_time = datetime.now()
+        self.tasks_completed = 0
+        self.tasks_failed = 0
+        self.last_task = "None"
+        try:
+            if sys.platform == 'win32':
+                sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
 
     def log(self, message):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -36,7 +45,6 @@ class ContinuousDeveloper:
         """Invoke kbj2 main via subprocess for isolation."""
         self.log(f"Executing: {task_description}")
         
-        # We use 'python main.py strat "task"' to trigger the 21-agent team
         cmd = [sys.executable, str(KBJ2_ROOT / "main.py"), "strat", task_description]
         
         process = await asyncio.create_subprocess_exec(
@@ -76,24 +84,25 @@ class ContinuousDeveloper:
             
             if not pending_tasks:
                 self.log("No pending tasks in queue. Sleeping...")
-                await asyncio.sleep(600) # Check queue every 10 mins even when sleeping
+                await asyncio.sleep(600)
                 continue
 
-            # Pick highest priority task
             next_task = sorted(pending_tasks, key=lambda x: (x["priority"] != "high", x["priority"] != "medium"))[0]
             
-            # Start Processing
             next_task["status"] = "running"
             next_task["updated_at"] = datetime.now().isoformat()
+            self.last_task = next_task["description"][:50]
             self.save_queue(queue)
 
             success, output = await self.run_kbj2_task(next_task["description"])
             
             if success:
                 next_task["status"] = "completed"
+                self.tasks_completed += 1
                 await self.sync_git(next_task["description"])
             else:
                 next_task["status"] = "failed"
+                self.tasks_failed += 1
             
             next_task["updated_at"] = datetime.now().isoformat()
             self.save_queue(queue)
@@ -101,6 +110,39 @@ class ContinuousDeveloper:
             self.log(f"Next cycle in {INTERVAL_HOURS} hours...")
             await asyncio.sleep(INTERVAL_HOURS * 3600)
 
+    # --- Health Endpoint for Render Free Tier ---
+    async def start_health_server(self):
+        """Lightweight HTTP server so Render considers this a live web service."""
+        from aiohttp import web
+        
+        async def health_handler(request):
+            uptime = str(datetime.now() - self.start_time)
+            return web.json_response({
+                "service": "KBJ2 Continuous Developer",
+                "status": "running",
+                "uptime": uptime,
+                "tasks_completed": self.tasks_completed,
+                "tasks_failed": self.tasks_failed,
+                "last_task": self.last_task
+            })
+
+        app = web.Application()
+        app.router.add_get("/", health_handler)
+        app.router.add_get("/health", health_handler)
+        
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
+        await site.start()
+        self.log(f"🌐 Health endpoint active at http://0.0.0.0:{HEALTH_PORT}")
+
 if __name__ == "__main__":
     cd = ContinuousDeveloper()
-    asyncio.run(cd.main_loop())
+    
+    async def run_all():
+        await cd.start_health_server()
+        await cd.main_loop()
+    
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    asyncio.run(run_all())
