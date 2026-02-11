@@ -61,27 +61,37 @@ class TechnicalAnalyzer:
             score = intel.get("score", 50)
             rsi = score # Treat score as RSI proxy
             
-        # 3. Decision Matrix
+        # 3. Decision Matrix (Conservative Mode for 3% Target)
         action = "HOLD"
         confidence = 50
-        reason = "Neutral market conditions"
+        reason = "Monitoring market pulse..."
 
-        if rsi > 70:
-            action = "SELL"
-            confidence = 75
-            reason = f"Overbought conditions (RSI: {rsi:.1f}, Change: {change_pct:.2f}%)"
-        elif rsi < 30:
+        # Conservative BUY: Extreme oversold OR massive breakout with volume
+        if rsi < 25:
+            action = "BUY"
+            confidence = 85
+            reason = f"🔥 High Conviction Oversold (RSI: {rsi:.1f})"
+        elif change_pct > 3.5:
             action = "BUY"
             confidence = 80
-            reason = f"Oversold conditions (RSI: {rsi:.1f}, Change: {change_pct:.2f}%)"
-        elif change_pct > 2.0:
-            action = "BUY"
-            confidence = 60
-            reason = f"Strong upward momentum (+{change_pct:.2f}%)"
-        elif change_pct < -2.0:
+            reason = f"🚀 Momentum Breakout (+{change_pct:.2f}%)"
+
+        # Strategic SELL: Extreme overbought OR hitting targets
+        elif rsi > 75:
             action = "SELL"
-            confidence = 60
-            reason = f"Strong downward pressure ({change_pct:.2f}%)"
+            confidence = 85
+            reason = f"⚠️ Overbought Alert (RSI: {rsi:.1f})"
+        elif change_pct < -3.0:
+            action = "SELL"
+            confidence = 70
+            reason = f"📉 Protecting Capital: Trend reversal ({change_pct:.2f}%)"
+            
+        # Target Exit: Check if current gain is near or above terminal target (3%)
+        # In real account, we'd check average purchase price, but here we use session change
+        if action == "HOLD" and change_pct >= 3.0:
+            action = "SELL"
+            confidence = 90
+            reason = f"🎯 Profit Target Reached: +{change_pct:.2f}% (Daily Goal: 3%)"
             
         return {
             "action": action,

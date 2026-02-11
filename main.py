@@ -89,6 +89,9 @@ async def main():
     r2_url.add_argument("key", help="R2 file key")
     r2_url.add_argument("--expires", type=int, default=3600, help="Expiration seconds")
 
+    # R2 Dashboard
+    r2_dash = r2_subparsers.add_parser("dashboard", help="R2 Storage Dashboard")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -138,6 +141,13 @@ async def main():
     # Command: r2 (Cloudflare R2 Storage)
     elif args.command == "r2":
         if args.r2_command == "explore":
+            # GUI app - run directly without asyncio subprocess
+            import subprocess
+            subprocess.run([sys.executable, "r2_explorer.py"])
+        elif args.r2_command == "dashboard":
+            # R2 Dashboard
+            import subprocess
+            subprocess.run([sys.executable, "r2_dashboard.py"])
             # GUI app - run directly without asyncio subprocess
             import subprocess
             subprocess.run([sys.executable, "r2_explorer.py"])
