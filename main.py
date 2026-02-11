@@ -54,6 +54,10 @@ async def main():
     # Command: server (Socket Server)
     server_parser = subparsers.add_parser("server", help="Start KBJ2 Socket-Based Agent Server")
 
+    # Command: monitor (Real-time Stock Monitor)
+    monitor_parser = subparsers.add_parser("monitor", help="Start Real-time US Stock Monitor Agent")
+    monitor_parser.add_argument("--duration", type=int, default=30, help="Duration in minutes")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -96,6 +100,9 @@ async def main():
 
     elif args.command == "server":
         await run_standalone("socket_server.py", ["server"])
+
+    elif args.command == "monitor":
+        await run_standalone("stock_monitor_agent.py", ["--duration", str(args.duration)])
 
 if __name__ == "__main__":
     if sys.platform == 'win32':

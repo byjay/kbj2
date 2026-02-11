@@ -41,11 +41,16 @@ class ContinuousDeveloper:
         with open(QUEUE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-    async def run_kbj2_task(self, task_description):
-        """Invoke kbj2 main via subprocess for isolation."""
-        self.log(f"Executing: {task_description}")
+    async def run_kbj2_task(self, task):
+        """Invoke kbj2 main via subprocess. Task can be string or dict."""
         
-        cmd = [sys.executable, str(KBJ2_ROOT / "main.py"), "strat", task_description]
+        if isinstance(task, dict) and task.get("type") == "monitor":
+            self.log(f"🕵️‍♂️ Launching Real-time Stock Monitor...")
+            cmd = [sys.executable, str(KBJ2_ROOT / "main.py"), "monitor", "--duration", "25"]
+        else:
+            description = task["description"] if isinstance(task, dict) else task
+            self.log(f"Executing: {description}")
+            cmd = [sys.executable, str(KBJ2_ROOT / "main.py"), "strat", description]
         
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -81,24 +86,20 @@ class ContinuousDeveloper:
         
         while self.is_running:
             # --- Night Shift Logic (US Market Hours: 22:00 - 06:00 KST) ---
-            # KST = UTC+9. 
-            # 22:00 KST = 13:00 UTC
-            # 06:00 KST = 21:00 UTC
             now_utc = datetime.utcnow()
             hour_utc = now_utc.hour
-            
-            # Check if current time is within 13:00 UTC to 21:00 UTC
             is_night_shift = 13 <= hour_utc < 21
             
             queue = self.load_queue()
             pending_tasks = [t for t in queue["tasks"] if t["status"] == "pending"]
             
-            # [Night Shift] Auto-Generate US Analysis Task
+            # [Night Shift] Auto-Generate Real-time Monitor Task
             if is_night_shift and not pending_tasks:
-                self.log("🌙 Night Shift Active (US Market): Generating Analysis Task...")
+                self.log("🌙 Night Shift Active: Launching Real-time US Stock Monitor...")
                 us_task = {
-                    "id": f"night_shift_{int(datetime.now().timestamp())}",
-                    "description": "Analyze real-time US Market charts, identify patterns, and accumulate learning data.",
+                    "id": f"monitor_{int(datetime.now().timestamp())}",
+                    "type": "monitor", # Special type for logic routing
+                    "description": "Real-time US Market Monitoring & Trading Analysis",
                     "status": "pending",
                     "priority": "high",
                     "created_at": datetime.now().isoformat()
@@ -106,7 +107,7 @@ class ContinuousDeveloper:
                 queue["tasks"].append(us_task)
                 pending_tasks.append(us_task)
                 self.save_queue(queue)
-                current_interval = 30 * 60 # 30 minutes during night shift
+                current_interval = 25 * 60 # 25 min duration + sync time
             else:
                 current_interval = INTERVAL_HOURS * 3600 # 5 hours normally
 
@@ -125,7 +126,8 @@ class ContinuousDeveloper:
             self.last_task = next_task["description"][:50]
             self.save_queue(queue)
 
-            success, output = await self.run_kbj2_task(next_task["description"])
+            # Pass the entire task object to support 'type' checking
+            success, output = await self.run_kbj2_task(next_task)
             
             if success:
                 next_task["status"] = "completed"
@@ -139,8 +141,14 @@ class ContinuousDeveloper:
             self.save_queue(queue)
 
             # Determine sleep time based on shift
-            sleep_time = 30 * 60 if is_night_shift else current_interval
-            self.log(f"Next cycle in {sleep_time/60:.0f} minutes...")
+            # If night shift, sleep just a bit to allow sync, then loop again immediately
+            sleep_time = 60 if is_night_shift else current_interval
+            
+            if is_night_shift:
+               self.log(f"🌙 Night Shift: Recycling in 1 minute...")
+            else:
+               self.log(f"Next cycle in {sleep_time/3600:.1f} hours...")
+               
             await asyncio.sleep(sleep_time)
 
     # --- Health Endpoint for Render Free Tier ---
