@@ -44,12 +44,21 @@ class ContinuousDeveloper:
     async def run_kbj2_task(self, task):
         """Invoke kbj2 main via subprocess. Task can be string or dict."""
         
-        if isinstance(task, dict) and task.get("type") == "monitor":
+        # Determine Task Type
+        is_monitor = False
+        description = task
+        if isinstance(task, dict):
+            description = task["description"]
+            # Check explicit type OR keyword in description
+            if task.get("type") == "monitor" or "monitor" in description.lower():
+                is_monitor = True
+
+        if is_monitor:
             self.log(f"🕵️‍♂️ Launching Real-time Stock Monitor...")
-            cmd = [sys.executable, str(KBJ2_ROOT / "main.py"), "monitor", "--duration", "25"]
+            # Default to 30 mins for remote commands if not specified
+            cmd = [sys.executable, str(KBJ2_ROOT / "main.py"), "monitor", "--duration", "30"]
         else:
-            description = task["description"] if isinstance(task, dict) else task
-            self.log(f"Executing: {description}")
+            self.log(f"Executing Strategy: {description}")
             cmd = [sys.executable, str(KBJ2_ROOT / "main.py"), "strat", description]
         
         process = await asyncio.create_subprocess_exec(
