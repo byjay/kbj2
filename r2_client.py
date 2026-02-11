@@ -3,12 +3,23 @@ KBJ2 R2 Cloud Storage Client
 Cloudflare R2 (S3 Compatible) File Management
 """
 import os
+import json
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from typing import List, Dict, Optional, Generator
 from datetime import datetime, timedelta
 from pathlib import Path
+
+
+# Load config from config.json
+def load_config():
+    """Load R2 config from config.json"""
+    config_file = Path(__file__).parent / "config.json"
+    if config_file.exists():
+        with open(config_file, 'r', encoding='utf-8') as f:
+            return json.load(f).get('r2', {})
+    return {}
 
 
 class R2Client:
@@ -21,21 +32,31 @@ class R2Client:
         secret_key: str = None,
         bucket_name: str = "kbj2-storage"
     ):
-        self.account_id = account_id or os.environ.get("R2_ACCOUNT_ID")
-        self.access_key = access_key or os.environ.get("R2_ACCESS_KEY")
-        self.secret_key = secret_key or os.environ.get("R2_SECRET_KEY")
-        self.bucket_name = bucket_name or os.environ.get("R2_BUCKET_NAME", "kbj2-storage")
+        # Load from config.json as fallback
+        config = load_config()
+
+        self.account_id = account_id or os.environ.get("R2_ACCOUNT_ID") or config.get("account_id")
+        self.access_key = access_key or os.environ.get("R2_ACCESS_KEY") or config.get("access_key")
+        self.secret_key = secret_key or os.environ.get("R2_SECRET_KEY") or config.get("secret_key")
+        self.bucket_name = bucket_name or os.environ.get("R2_BUCKET_NAME") or config.get("bucket_name", "kbj2-storage")
 
         if not all([self.account_id, self.access_key, self.secret_key]):
-            raise ValueError("R2 credentials not provided. Set R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY env vars.")
+            raise ValueError("R2 credentials not provided. Set R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY env vars or config.json.")
 
         self.s3_client = boto3.client(
             service_name='s3',
             endpoint_url=f"https://{self.account_id}.r2.cloudflarestorage.com",
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
-            config=Config(signature_version='s3v4'),
-            region_name='auto'
+            config=Config(
+                signature_version='s3v4',
+                region_name='auto',
+                # SSL 설정 수정
+                connect_timeout=10,
+                read_timeout=10,
+                retries={'max_attempts': 3}
+            ),
+            use_ssl=True  # SSL 사용
         )
 
     # ============================================================

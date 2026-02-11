@@ -107,10 +107,13 @@ class ExecutionEngine:
             
         log(f"🚀 [Execution] Sending {action} order for {ticker} (Confidence: {confidence}%)")
         
-        # Determine Market
-        market = "KR"
-        if any(c.isalpha() for c in ticker) or len(ticker) > 6:
-            market = "US"
+        # Strict US Market Enforcement
+        is_us = any(c.isalpha() for c in ticker) or len(ticker) > 6
+        if not is_us:
+            log(f"⚠️ [Execution] Blocking KR Trade request for {ticker}. US Market Only.")
+            return False
+            
+        market = "US"
             
         payload = {
             "ticker": ticker,
@@ -189,9 +192,16 @@ class StockMonitorAgent:
 
             for item in radar:
                 ticker = item.get("ticker", "UNKNOWN")
+                
+                # --- Strict US Market Filter ---
+                # KR stocks are usually 6 numeric digits. US stocks have alphabetic chars.
+                is_us_stock = any(c.isalpha() for c in ticker) or len(ticker) > 6
+                if not is_us_stock:
+                    continue # Skip KR stocks autonomously
+                
                 if ticker in self.analyzed_tickers: continue 
 
-                log(f"🔍 Analyzing {ticker}...")
+                log(f"🔍 Analyzing US Stock: {ticker}...")
                 intel = self.fetch_ticker_intelligence(ticker)
                 
                 # Merge data
