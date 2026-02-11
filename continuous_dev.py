@@ -67,6 +67,8 @@ class ContinuousDeveloper:
         """Commit and push changes to repository."""
         self.log("Syncing changes to Git...")
         try:
+            # Ensure data directory is tracked
+            subprocess.run(["git", "add", "data/"], cwd=str(KBJ2_ROOT), check=False)
             subprocess.run(["git", "add", "."], cwd=str(KBJ2_ROOT), check=True)
             subprocess.run(["git", "commit", "-m", f"🤖 Auto-Dev: {message}"], cwd=str(KBJ2_ROOT), check=True)
             subprocess.run(["git", "push"], cwd=str(KBJ2_ROOT), check=True)
@@ -76,19 +78,48 @@ class ContinuousDeveloper:
 
     async def main_loop(self):
         self.log("Starting KBJ2 Continuous Developer Service (24h)")
-        self.log(f"Scan Interval: {INTERVAL_HOURS} hours")
         
         while self.is_running:
+            # --- Night Shift Logic (US Market Hours: 22:00 - 06:00 KST) ---
+            # KST = UTC+9. 
+            # 22:00 KST = 13:00 UTC
+            # 06:00 KST = 21:00 UTC
+            now_utc = datetime.utcnow()
+            hour_utc = now_utc.hour
+            
+            # Check if current time is within 13:00 UTC to 21:00 UTC
+            is_night_shift = 13 <= hour_utc < 21
+            
             queue = self.load_queue()
             pending_tasks = [t for t in queue["tasks"] if t["status"] == "pending"]
             
+            # [Night Shift] Auto-Generate US Analysis Task
+            if is_night_shift and not pending_tasks:
+                self.log("🌙 Night Shift Active (US Market): Generating Analysis Task...")
+                us_task = {
+                    "id": f"night_shift_{int(datetime.now().timestamp())}",
+                    "description": "Analyze real-time US Market charts, identify patterns, and accumulate learning data.",
+                    "status": "pending",
+                    "priority": "high",
+                    "created_at": datetime.now().isoformat()
+                }
+                queue["tasks"].append(us_task)
+                pending_tasks.append(us_task)
+                self.save_queue(queue)
+                current_interval = 30 * 60 # 30 minutes during night shift
+            else:
+                current_interval = INTERVAL_HOURS * 3600 # 5 hours normally
+
             if not pending_tasks:
-                self.log("No pending tasks in queue. Sleeping...")
+                self.log(f"No pending tasks. Sleeping for {current_interval/3600:.1f} hours...")
+                # Still check every 10 mins for remote commands
                 await asyncio.sleep(600)
                 continue
 
+            # Pick highest priority task
             next_task = sorted(pending_tasks, key=lambda x: (x["priority"] != "high", x["priority"] != "medium"))[0]
             
+            # Start Processing
             next_task["status"] = "running"
             next_task["updated_at"] = datetime.now().isoformat()
             self.last_task = next_task["description"][:50]
@@ -107,8 +138,10 @@ class ContinuousDeveloper:
             next_task["updated_at"] = datetime.now().isoformat()
             self.save_queue(queue)
 
-            self.log(f"Next cycle in {INTERVAL_HOURS} hours...")
-            await asyncio.sleep(INTERVAL_HOURS * 3600)
+            # Determine sleep time based on shift
+            sleep_time = 30 * 60 if is_night_shift else current_interval
+            self.log(f"Next cycle in {sleep_time/60:.0f} minutes...")
+            await asyncio.sleep(sleep_time)
 
     # --- Health Endpoint for Render Free Tier ---
     async def start_health_server(self):
