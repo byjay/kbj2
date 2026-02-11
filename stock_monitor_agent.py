@@ -182,9 +182,12 @@ class StockMonitorAgent:
             log(f"Failed to save learning data: {e}")
 
     async def run(self):
-        log(f"Starting US Market Monitoring (Heuristic Mode) for {self.duration_minutes} minutes...")
+        log(f"Starting 24/7 US Market Monitoring (Heuristic Mode)...")
         
-        while datetime.now() < self.end_time:
+        while True: # Eternal Loop for Server Session
+            # Control: Only run during active window or if forced
+            # (Night Shift logic in continuous_dev handles the 13:00-21:00 UTC window)
+            
             radar = self.fetch_market_radar()
             has_explosion = any(item.get("source") == "EXPLOSION_SCANNER" for item in radar)
             
