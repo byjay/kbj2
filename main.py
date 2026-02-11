@@ -46,6 +46,11 @@ async def main():
     skill_parser.add_argument("name", choices=["image", "ppt", "youtube"], help="Skill name")
     skill_parser.add_argument("task", type=str, help="Task for the skill")
 
+    # Command: pdf (DOCX to PDF)
+    pdf_parser = subparsers.add_parser("pdf", help="Convert DOCX to PDF (Background Word Export)")
+    pdf_parser.add_argument("target", type=str, nargs='?', default=None, help="Path to DOCX file or directory")
+    pdf_parser.add_argument("--gui", action="store_true", help="Launch Drag & Drop Visual Interface")
+
     # Command: server (Socket Server)
     server_parser = subparsers.add_parser("server", help="Start KBJ2 Socket-Based Agent Server")
 
@@ -80,6 +85,14 @@ async def main():
             "youtube": "youtube_analysis_skill.py"
         }
         await run_standalone(skill_map[args.name], [args.task])
+
+    elif args.command == "pdf":
+        if args.gui:
+            await run_standalone("docx_to_pdf_gui.py")
+        elif args.target:
+            await run_standalone("docx_to_pdf_skill.py", [args.target])
+        else:
+            print("❌ Error: Specify a target path or use --gui")
 
     elif args.command == "server":
         await run_standalone("socket_server.py", ["server"])

@@ -267,52 +267,52 @@ IMPORTANT: ALL CONTENT (analysis, recommendation) MUST BE IN KOREAN (한국어).
             try:
                 print(f"🤖 [{agent_name}] Thinking... ({self.provider})")
             
-            if self.provider == "simulation":
-                raise Exception("Provider set to Simulation Mode")
+                if self.provider == "simulation":
+                    raise Exception("Provider set to Simulation Mode")
 
-            if self.provider == "hybrid":
-                # PARALLEL EXECUTION (Gemini + GLM)
-                print(f"   🚀 [Hybrid] Launching Parallel Executors (Gemini + GLM-4.7)...")
-                
-                # Execute both
-                gemini_task = self._run_gemini(prompt, temperature)
-                glm_task = self._run_glm(prompt, temperature)
-                
-                results = await asyncio.gather(gemini_task, glm_task, return_exceptions=True)
-                
-                # Meritocracy Selection (Pick success or merge)
-                gemini_res, glm_res = results[0], results[1]
-                
-                if isinstance(gemini_res, dict) and isinstance(glm_res, dict):
-                     # Construct Merged Result
-                     result = gemini_res
-                     result['analysis'] = f"💎 [Gemini]: {gemini_res.get('analysis')}\n\n🤖 [GLM-4]: {glm_res.get('analysis')}"
-                     result['recommendation'] = f"Joint Recommendation: {gemini_res.get('recommendation')} | {glm_res.get('recommendation')}"
-                elif isinstance(gemini_res, dict):
-                    print("   ⚠️ GLM Failed, using Gemini.")
-                    result = gemini_res
-                elif isinstance(glm_res, dict):
-                    print("   ⚠️ Gemini Failed, using GLM.")
-                    result = glm_res
-                else:
-                    raise Exception("Both models failed.")
+                if self.provider == "hybrid":
+                    # PARALLEL EXECUTION (Gemini + GLM)
+                    print(f"   🚀 [Hybrid] Launching Parallel Executors (Gemini + GLM-4.7)...")
+                    
+                    # Execute both
+                    gemini_task = self._run_gemini(prompt, temperature)
+                    glm_task = self._run_glm(prompt, temperature)
+                    
+                    results = await asyncio.gather(gemini_task, glm_task, return_exceptions=True)
+                    
+                    # Meritocracy Selection (Pick success or merge)
+                    gemini_res, glm_res = results[0], results[1]
+                    
+                    if isinstance(gemini_res, dict) and isinstance(glm_res, dict):
+                        # Construct Merged Result
+                        result = gemini_res
+                        result['analysis'] = f"💎 [Gemini]: {gemini_res.get('analysis')}\n\n🤖 [GLM-4]: {glm_res.get('analysis')}"
+                        result['recommendation'] = f"Joint Recommendation: {gemini_res.get('recommendation')} | {glm_res.get('recommendation')}"
+                    elif isinstance(gemini_res, dict):
+                        print("   ⚠️ GLM Failed, using Gemini.")
+                        result = gemini_res
+                    elif isinstance(glm_res, dict):
+                        print("   ⚠️ Gemini Failed, using GLM.")
+                        result = glm_res
+                    else:
+                        raise Exception("Both models failed.")
 
-            elif self.provider == "gemini":
-                 result = await self._run_gemini(prompt, temperature)
-            
-            elif self.provider == "glm":
-                 result = await self._run_glm(prompt, temperature)
+                elif self.provider == "gemini":
+                    result = await self._run_gemini(prompt, temperature)
                 
-        except Exception as e:
-            # SIMULATION FALLBACK MODE
-            print(f"   🔄 [Simulation Mode] Generating fallback response for {agent_name}... (Error: {e})")
-            result = {
-                "agent_id": agent_id,
-                "agent_name": agent_name,
-                "analysis": f"[SIMULATION] Analysis processed by {agent_name}. (Provider Error)",
-                "recommendation": f"Proceed with plan as designed. Verified by {agent_name}.",
-                "status": "simulated_success"
-            }
+                elif self.provider == "glm":
+                    result = await self._run_glm(prompt, temperature)
+                
+            except Exception as e:
+                # SIMULATION FALLBACK MODE
+                print(f"   🔄 [Simulation Mode] Generating fallback response for {agent_name}... (Error: {e})")
+                result = {
+                    "agent_id": agent_id,
+                    "agent_name": agent_name,
+                    "analysis": f"[SIMULATION] Analysis processed by {agent_name}. (Provider Error)",
+                    "recommendation": f"Proceed with plan as designed. Verified by {agent_name}.",
+                    "status": "simulated_success"
+                }
 
         # Log Result
         analysis = result.get('analysis', str(result)[:200])
