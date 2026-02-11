@@ -123,12 +123,40 @@ class ContinuousDeveloper:
                 "uptime": uptime,
                 "tasks_completed": self.tasks_completed,
                 "tasks_failed": self.tasks_failed,
-                "last_task": self.last_task
+                "last_task": self.last_task,
+                "queue_size": len(self.load_queue()["tasks"])
             })
+
+        async def add_task_handler(request):
+            try:
+                data = await request.json()
+                description = data.get("description")
+                priority = data.get("priority", "medium")
+                
+                if not description:
+                    return web.json_response({"error": "Description required"}, status=400)
+                
+                new_task = {
+                    "id": f"task_{int(datetime.now().timestamp())}",
+                    "description": description,
+                    "status": "pending",
+                    "priority": priority,
+                    "created_at": datetime.now().isoformat()
+                }
+                
+                queue = self.load_queue()
+                queue["tasks"].append(new_task)
+                self.save_queue(queue)
+                
+                self.log(f"📨 Remote Task Received: {description}")
+                return web.json_response({"status": "queued", "task": new_task})
+            except Exception as e:
+                return web.json_response({"error": str(e)}, status=500)
 
         app = web.Application()
         app.router.add_get("/", health_handler)
         app.router.add_get("/health", health_handler)
+        app.router.add_post("/admin/task", add_task_handler) # Remote Command Endpoint
         
         runner = web.AppRunner(app)
         await runner.setup()
