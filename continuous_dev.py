@@ -136,12 +136,33 @@ class ContinuousDeveloper:
         await site.start()
         self.log(f"🌐 Health endpoint active at http://0.0.0.0:{HEALTH_PORT}")
 
+    # --- Keep-Alive Mechanism ---
+    async def keep_alive(self):
+        """Ping the Stock Dashboard every 14 minutes to prevent sleep."""
+        import aiohttp
+        url = "https://isats-stock-dashboard.onrender.com"
+        self.log(f"⏰ Keep-Alive System Activated: Pinging {url} every 14 mins")
+        
+        async with aiohttp.ClientSession() as session:
+            while self.is_running:
+                try:
+                    async with session.get(url) as resp:
+                        status = resp.status
+                        self.log(f"💓 Ping sent to Stock Dashboard. Status: {status}")
+                except Exception as e:
+                    self.log(f"⚠️ Keep-Alive Ping Failed: {e}")
+                
+                await asyncio.sleep(14 * 60) # 14 minutes
+
 if __name__ == "__main__":
     cd = ContinuousDeveloper()
     
     async def run_all():
-        await cd.start_health_server()
-        await cd.main_loop()
+        await asyncio.gather(
+            cd.start_health_server(),
+            cd.main_loop(),
+            cd.keep_alive()
+        )
     
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
