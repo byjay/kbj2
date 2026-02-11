@@ -58,6 +58,37 @@ async def main():
     monitor_parser = subparsers.add_parser("monitor", help="Start Real-time US Stock Monitor Agent")
     monitor_parser.add_argument("--duration", type=int, default=30, help="Duration in minutes")
 
+    # Command: r2 (Cloudflare R2 Storage)
+    r2_parser = subparsers.add_parser("r2", help="R2 Cloud Storage Manager")
+    r2_subparsers = r2_parser.add_subparsers(dest="r2_command", help="R2 command")
+
+    # R2 Explore (GUI)
+    r2_gui = r2_subparsers.add_parser("explore", help="Launch R2 File Explorer GUI")
+
+    # R2 Upload
+    r2_up = r2_subparsers.add_parser("upload", help="Upload files to R2")
+    r2_up.add_argument("path", help="Local file or directory")
+    r2_up.add_argument("--key", help="R2 destination key")
+    r2_up.add_argument("--prefix", default="", help="R2 prefix for directory")
+
+    # R2 Download
+    r2_down = r2_subparsers.add_parser("download", help="Download from R2")
+    r2_down.add_argument("key", help="R2 file key")
+    r2_down.add_argument("--dest", help="Local destination")
+
+    # R2 List
+    r2_ls = r2_subparsers.add_parser("ls", help="List R2 files")
+    r2_ls.add_argument("--prefix", default="", help="R2 prefix")
+
+    # R2 Delete
+    r2_rm = r2_subparsers.add_parser("rm", help="Delete R2 file")
+    r2_rm.add_argument("key", help="R2 file key")
+
+    # R2 Share URL
+    r2_url = r2_subparsers.add_parser("share", help="Generate signed URL")
+    r2_url.add_argument("key", help="R2 file key")
+    r2_url.add_argument("--expires", type=int, default=3600, help="Expiration seconds")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -103,6 +134,37 @@ async def main():
 
     elif args.command == "monitor":
         await run_standalone("stock_monitor_agent.py", ["--duration", str(args.duration)])
+
+    # Command: r2 (Cloudflare R2 Storage)
+    elif args.command == "r2":
+        if args.r2_command == "explore":
+            await run_standalone("r2_explorer.py")
+        elif args.r2_command == "upload":
+            from r2_client import R2Client
+            client = R2Client()
+            path = args.path
+            if os.path.isfile(path):
+                client.upload_file(path, args.key)
+            elif os.path.isdir(path):
+                client.upload_dir(path, args.prefix)
+        elif args.r2_command == "download":
+            from r2_client import R2Client
+            client = R2Client()
+            client.download_file(args.key, args.dest)
+        elif args.r2_command == "ls":
+            from r2_client import R2Client
+            client = R2Client()
+            for obj in client.list_files(args.prefix):
+                print(f"  {obj['key']} ({obj['size']} bytes)")
+        elif args.r2_command == "rm":
+            from r2_client import R2Client
+            client = R2Client()
+            client.delete_file(args.key)
+        elif args.r2_command == "share":
+            from r2_client import R2Client
+            client = R2Client()
+            url = client.get_signed_url(args.key, args.expires)
+            print(f"Share URL: {url}")
 
 if __name__ == "__main__":
     if sys.platform == 'win32':

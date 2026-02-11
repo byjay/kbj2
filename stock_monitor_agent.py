@@ -16,6 +16,18 @@ LEARNING_FILE = os.path.join(DATA_DIR, "learning_data.jsonl")
 # Ensure Data Dir Exists
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# Load .env manually
+def load_env():
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if '=' in line and not line.startswith('#'):
+                    key, value = line.strip().split('=', 1)
+                    os.environ[key] = value.strip()
+
+load_env()
+
 # Configure Gemini
 api_key = os.getenv("GEMINI_API_KEY")
 if api_key:

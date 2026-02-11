@@ -1,0 +1,1 @@
+{"timestamp": "2026-02-11T14:34:04.879651", "ticker": "SPY", "input": {"ticker": "SPY", "close": 0, "intelligence": {}}, "output": {"action": "HOLD", "reason": "Error"}}
