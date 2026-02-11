@@ -30,7 +30,8 @@ class R2Client:
         account_id: str = None,
         access_key: str = None,
         secret_key: str = None,
-        bucket_name: str = "kbj2-storage"
+        bucket_name: str = "kbj2-storage",
+        offline_mode: bool = False
     ):
         # Load from config.json as fallback
         config = load_config()
@@ -39,8 +40,9 @@ class R2Client:
         self.access_key = access_key or os.environ.get("R2_ACCESS_KEY") or config.get("access_key")
         self.secret_key = secret_key or os.environ.get("R2_SECRET_KEY") or config.get("secret_key")
         self.bucket_name = bucket_name or os.environ.get("R2_BUCKET_NAME") or config.get("bucket_name", "kbj2-storage")
+        self.offline_mode = offline_mode  # 오프라인 모드
 
-        if not all([self.account_id, self.access_key, self.secret_key]):
+        if not all([self.account_id, self.access_key, self.secret_key]) and not offline_mode:
             raise ValueError("R2 credentials not provided. Set R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY env vars or config.json.")
 
         self.s3_client = boto3.client(

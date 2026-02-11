@@ -186,22 +186,24 @@ class StockMonitorAgent:
         
         while datetime.now() < self.end_time:
             radar = self.fetch_market_radar()
+            has_explosion = any(item.get("source") == "EXPLOSION_SCANNER" for item in radar)
+            
             if not radar:
                 log("No targets found in radar. analyzing SPY as fallback...")
-                radar = [{"ticker": "SPY", "close": 500.0, "prev_close": 498.0}]
+                radar = [{"ticker": "SPY", "close": 500.0, "prev_close": 498.0, "source": "FALLBACK"}]
 
             for item in radar:
                 ticker = item.get("ticker", "UNKNOWN")
+                source = item.get("source", "UNKNOWN")
                 
                 # --- Strict US Market Filter ---
-                # KR stocks are usually 6 numeric digits. US stocks have alphabetic chars.
                 is_us_stock = any(c.isalpha() for c in ticker) or len(ticker) > 6
                 if not is_us_stock:
-                    continue # Skip KR stocks autonomously
+                    continue 
                 
                 if ticker in self.analyzed_tickers: continue 
 
-                log(f"🔍 Analyzing US Stock: {ticker}...")
+                log(f"🔍 Analyzing US Stock [{source}]: {ticker}...")
                 intel = self.fetch_ticker_intelligence(ticker)
                 
                 # Merge data
@@ -209,6 +211,12 @@ class StockMonitorAgent:
                 
                 # Heuristic Decision
                 decision = self.analyzer.analyze(ticker, analysis_context)
+                
+                # Bonus confidence for Explosion targets
+                if source == "EXPLOSION_SCANNER":
+                    decision["confidence"] = min(100, decision["confidence"] + 5)
+                    log(f"⚡ [Explosion Bonus] Boosted confidence for {ticker}")
+
                 log(f"👉 {ticker}: {decision['action']} ({decision.get('confidence')}%) - {decision.get('reason')}")
                 
                 # Execute Trade if High Confidence
@@ -226,14 +234,18 @@ class StockMonitorAgent:
                 self.analyzed_tickers.add(ticker)
                 await asyncio.sleep(1) # Rate limit
 
+            # Recycle tickers for fresh analysis
+            self.analyzed_tickers.clear() 
+            
             # Wait before next scan
             remaining = (self.end_time - datetime.now()).total_seconds()
             if remaining <= 0: break
             
-            sleep_time = min(60, remaining) # Max 1 min sleep
-            log(f"Sleeping for {sleep_time:.0f}s...")
+            # Faster polling if market is exploding
+            interval = 30 if has_explosion else 60
+            sleep_time = min(interval, remaining) 
+            log(f"Sleeping for {sleep_time:.0f}s... (Explosion Mode: {has_explosion})")
             await asyncio.sleep(sleep_time)
-            self.analyzed_tickers.clear() 
 
         log("Monitoring Session Complete.")
 
